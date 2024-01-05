@@ -62,13 +62,12 @@ class File(page.Page):
 		if self.pageid > 0:
 			params['pageids'] = self.pageid
 		else:
-			params['titles'] = self.title	
+			params['titles'] = self.title
 		req = api.APIRequest(self.site, params)
 		self.filehistory = []
 		for data in req.queryGen():
 			pid = data['query']['pages'].keys()[0]
-			for item in data['query']['pages'][pid]['imageinfo']:
-				self.filehistory.append(item)
+			self.filehistory.extend(iter(data['query']['pages'][pid]['imageinfo']))
 		return self.filehistory
 			
 	def getUsage(self, titleonly=False, force=False, namespaces=False):
@@ -151,8 +150,7 @@ class File(page.Page):
 	def __extractToList(self, json, stuff):
 		list = []
 		if stuff in json['query']:
-			for item in json['query'][stuff]:
-				list.append(item['title'])
+			list.extend(item['title'] for item in json['query'][stuff])
 		return list
 	
 	def download(self, width=False, height=False, location=False):
@@ -195,9 +193,8 @@ class File(page.Page):
 		headers = { "User-agent": self.site.useragent }
 		request = urllib2.Request(url, None, headers)
 		data = opener.open(request)
-		f = open(location, 'wb', 0)
-		f.write(data.read())
-		f.close()
+		with open(location, 'wb', 0) as f:
+			f.write(data.read())
 		return location
 		
 	def upload(self, fileobj=None, comment='', url=None, ignorewarnings=False, watch=False):

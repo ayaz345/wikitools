@@ -69,7 +69,7 @@ class APIRequest:
 		self.iswrite = write
 		if wiki.assertval is not None and self.iswrite:
 			self.data['assert'] =  wiki.assertval
-		if not 'maxlag' in self.data and not wiki.maxlag < 0:
+		if 'maxlag' not in self.data and wiki.maxlag >= 0:
 			self.data['maxlag'] = wiki.maxlag
 		self.multipart = multipart
 		if self.multipart:
@@ -90,7 +90,8 @@ class APIRequest:
 		self.response = False
 		if wiki.auth:
 			self.headers['Authorization'] = "Basic {0}".format(
-				base64.encodestring(wiki.auth + ":" + wiki.httppass)).replace('\n','')
+				base64.encodestring(f"{wiki.auth}:{wiki.httppass}")
+			).replace('\n', '')
 		if hasattr(wiki, "passman"):
 			self.opener = urllib2.build_opener(urllib2.HTTPDigestAuthHandler(wiki.passman), urllib2.HTTPCookieProcessor(wiki.cookies))
 		else:
@@ -189,12 +190,11 @@ for queries requring multiple requests""", FutureWarning)
 					raise wiki.UserBlocked(data['error']['info'])
 				raise APIError(data['error']['code'], data['error']['info'])
 			yield data
-			if 'continue' not in data: 
+			if 'continue' not in data:
 				break
-			else:
-				self.request = copy.deepcopy(reqcopy)
-				for param in data['continue']:
-					self.changeParam(param, data['continue'][param])
+			self.request = copy.deepcopy(reqcopy)
+			for param in data['continue']:
+				self.changeParam(param, data['continue'][param])
 
 	def __longQuery(self, initialdata):
 		"""For queries that require multiple requests"""
@@ -248,10 +248,7 @@ for queries requring multiple requests""", FutureWarning)
 			res = req.query(False)
 			for type in possiblecontinues:
 				total = resultCombine(type, total, res)
-			if 'query-continue' in res:
-				numkeys = len(res['query-continue'].keys())
-			else:
-				numkeys = 0
+			numkeys = len(res['query-continue'].keys()) if 'query-continue' in res else 0
 		return total
 
 	def __getRaw(self):
@@ -328,76 +325,73 @@ def resultCombine(type, old, new):
 		ret['query'][type].extend(new['query'][type])
 	else: # Else its some sort of prop=thing and/or a generator query
 		for key in new['query']['pages'].keys(): # Go through each page
-			if not key in old['query']['pages']: # if it only exists in the new one
+			if key not in old['query']['pages']: # if it only exists in the new one
 				ret['query']['pages'][key] = new['query']['pages'][key] # add it to the list
-			else:
-				if not type in new['query']['pages'][key]:
-					continue
-				elif type in new['query']['pages'][key] and not type in ret['query']['pages'][key]: # if only the new one does, just add it to the return
-					ret['query']['pages'][key][type] = new['query']['pages'][key][type]
-					continue					
-				else: # Need to check for possible duplicates for some, this is faster than just iterating over new and checking for dups in ret
-					retset = set([tuple(entry.items()) for entry in ret['query']['pages'][key][type]])
-					newset = set([tuple(entry.items()) for entry in new['query']['pages'][key][type]])
-					retset.update(newset)
-					ret['query']['pages'][key][type] = [dict(entry) for entry in retset]
+			elif type not in new['query']['pages'][key]:
+				continue
+			elif type not in ret['query']['pages'][key]: # if only the new one does, just add it to the return
+				ret['query']['pages'][key][type] = new['query']['pages'][key][type]
+			else: # Need to check for possible duplicates for some, this is faster than just iterating over new and checking for dups in ret
+				retset = {tuple(entry.items()) for entry in ret['query']['pages'][key][type]}
+				newset = {tuple(entry.items()) for entry in new['query']['pages'][key][type]}
+				retset.update(newset)
+				ret['query']['pages'][key][type] = [dict(entry) for entry in retset]
 	return ret
 		
 def urlencode(query,doseq=0):
-    """
+	"""
 	Hack of urllib's urlencode function, which can handle
 	utf-8, but for unknown reasons, chooses not to by 
 	trying to encode everything as ascii
     """
-    if hasattr(query,"items"):
-        # mapping objects
-        query = query.items()
-    else:
-        # it's a bother at times that strings and string-like objects are
-        # sequences...
-        try:
-            # non-sequence items should not work with len()
-            # non-empty strings will fail this
-            if len(query) and not isinstance(query[0], tuple):
-                raise TypeError
-            # zero-length sequences of all types will get here and succeed,
-            # but that's a minor nit - since the original implementation
-            # allowed empty dicts that type of behavior probably should be
-            # preserved for consistency
-        except TypeError:
-            ty,va,tb = sys.exc_info()
-            raise TypeError, "not a valid non-string sequence or mapping object", tb
+	if hasattr(query,"items"):
+	    # mapping objects
+	    query = query.items()
+	else:
+	    # it's a bother at times that strings and string-like objects are
+	    # sequences...
+	    try:
+	        # non-sequence items should not work with len()
+	        # non-empty strings will fail this
+	        if len(query) and not isinstance(query[0], tuple):
+	            raise TypeError
+	        # zero-length sequences of all types will get here and succeed,
+	        # but that's a minor nit - since the original implementation
+	        # allowed empty dicts that type of behavior probably should be
+	        # preserved for consistency
+	    except TypeError:
+	        ty,va,tb = sys.exc_info()
+	        raise TypeError, "not a valid non-string sequence or mapping object", tb
 
-    l = []
-    if not doseq:
-        # preserve old behavior
-        for k, v in query:
-            k = quote_plus(str(k))
-            v = quote_plus(str(v))
-            l.append(k + '=' + v)
-    else:
-        for k, v in query:
-            k = quote_plus(str(k))
-            if isinstance(v, str):
-                v = quote_plus(v)
-                l.append(k + '=' + v)
-            elif _is_unicode(v):
-                # is there a reasonable way to convert to ASCII?
-                # encode generates a string, but "replace" or "ignore"
-                # lose information and "strict" can raise UnicodeError
-                v = quote_plus(v.encode("utf8","replace"))
-                l.append(k + '=' + v)
-            else:
-                try:
-                    # is this a sufficient test for sequence-ness?
-                    x = len(v)
-                except TypeError:
-                    # not a sequence
-                    v = quote_plus(str(v))
-                    l.append(k + '=' + v)
-                else:
-                    # loop over the sequence
-                    for elt in v:
-                        l.append(k + '=' + quote_plus(str(elt)))
-    return '&'.join(l)
+	l = []
+	if not doseq:
+		        # preserve old behavior
+		for k, v in query:
+			k = quote_plus(str(k))
+			v = quote_plus(str(v))
+			l.append(f'{k}={v}')
+	else:
+		for k, v in query:
+			k = quote_plus(str(k))
+			if isinstance(v, str):
+				v = quote_plus(v)
+				l.append(f'{k}={v}')
+			elif _is_unicode(v):
+				# is there a reasonable way to convert to ASCII?
+				# encode generates a string, but "replace" or "ignore"
+				# lose information and "strict" can raise UnicodeError
+				v = quote_plus(v.encode("utf8","replace"))
+				l.append(f'{k}={v}')
+			else:
+				try:
+					# is this a sufficient test for sequence-ness?
+					x = len(v)
+				except TypeError:
+					# not a sequence
+					v = quote_plus(str(v))
+					l.append(f'{k}={v}')
+				else:
+					                    # loop over the sequence
+					l.extend(f'{k}={quote_plus(str(elt))}' for elt in v)
+	return '&'.join(l)
 

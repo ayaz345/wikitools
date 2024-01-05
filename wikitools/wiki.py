@@ -71,7 +71,7 @@ class Wiki:
 		if httpuser is not None:
 			if httppass is None:
 				from getpass import getpass
-				self.httppass = getpass("HTTP Auth password for "+httpuser+": ")
+				self.httppass = getpass(f"HTTP Auth password for {httpuser}: ")
 			if preauth:
 				self.httppass = httppass
 				self.auth = httpuser
@@ -83,7 +83,7 @@ class Wiki:
 			self.auth = None
 		self.maxlag = 5
 		self.maxwaittime = 120
-		self.useragent = "python-wikitools/%s" % VERSION
+		self.useragent = f"python-wikitools/{VERSION}"
 		self.cookiepath = ''
 		self.limit = 500
 		self.siteinfo = {}
@@ -120,20 +120,19 @@ class Wiki:
 			self.namespaces[nsinfo['id']] = nsinfo
 			if ns != "0":
 				try:
-					attr = "NS_%s" % (nsdata[ns]['canonical'].replace(' ', '_').upper())
+					attr = f"NS_{nsdata[ns]['canonical'].replace(' ', '_').upper()}"
 				except KeyError:
-					attr = "NS_%s" % (nsdata[ns]['*'].replace(' ', '_').upper())
+					attr = f"NS_{nsdata[ns]['*'].replace(' ', '_').upper()}"
 			else:
 				attr = "NS_MAIN"
-			setattr(self, attr.encode('utf8'), Namespace(ns.encode('utf8')))			
-		nsaliasdata = info['query']['namespacealiases']
-		if nsaliasdata:
+			setattr(self, attr.encode('utf8'), Namespace(ns.encode('utf8')))
+		if nsaliasdata := info['query']['namespacealiases']:
 			for ns in nsaliasdata:
 				self.NSaliases[ns['*']] = ns['id']
-		if not 'writeapi' in sidata:
+		if 'writeapi' not in sidata:
 			warnings.warn(UserWarning, "WARNING: Write-API not enabled, you will not be able to edit")
 		version = re.search("\d\.(\d\d)", self.siteinfo['generator'])
-		if not int(version.group(1)) >= 13: # Will this even work on 13?
+		if int(version.group(1)) < 13: # Will this even work on 13?
 			warnings.warn(UserWarning, "WARNING: Some features may not work on older versions of MediaWiki")
 		if 'tokens' in info['query'].keys():
 			self.newtoken = True
@@ -218,7 +217,11 @@ class Wiki:
 		params = { 'action': 'logout' }
 		if self.maxlag < 120:
 			params['maxlag'] = 120
-		cookiefile = self.cookiepath + str(hash(self.username+' - '+self.apibase))+'.cookies'
+		cookiefile = (
+			self.cookiepath
+			+ str(hash(f'{self.username} - {self.apibase}'))
+			+ '.cookies'
+		)
 		try:
 			os.remove(cookiefile)
 		except:
@@ -230,7 +233,7 @@ class Wiki:
 		self.cookies = WikiCookieJar()
 		self.username = ''
 		self.maxlag = 5
-		self.useragent = "python-wikitools/%s" % VERSION
+		self.useragent = f"python-wikitools/{VERSION}"
 		self.limit = 500
 		return True
 		
@@ -309,7 +312,7 @@ class Wiki:
 			}
 			req = api.APIRequest(self, params)
 			response = req.query(False)
-			token = response['query']['tokens'][type+'token']
+			token = response['query']['tokens'][f'{type}token']
 		else:
 			if type not in ['edit', 'delete', 'protect', 'move', 'block', 'unblock', 'email', 'csrf']:
 				raise WikiError('Token type unavailable')
@@ -334,31 +337,20 @@ class Wiki:
 		return hash(self.apibase)
 		
 	def __eq__(self, other):
-		if not isinstance(other, Wiki):
-			return False
-		if self.apibase == other.apibase:
-			return True
-		return False
+		return False if not isinstance(other, Wiki) else self.apibase == other.apibase
 	def __ne__(self, other):
-		if not isinstance(other, Wiki):
-			return True
-		if self.apibase == other.apibase:
-			return False
-		return True
+		return True if not isinstance(other, Wiki) else self.apibase != other.apibase
 		
 	def __str__(self):
 		if self.username:
-			user = ' - using User:'+self.username
+			user = f' - using User:{self.username}'
 		else:
 			user = ' - not logged in'
 		return self.domain + user
 	
 	def __repr__(self):
-		if self.username:
-			user = ' User:'+self.username
-		else:
-			user = ' not logged in'
-		return "<"+self.__module__+'.'+self.__class__.__name__+" "+repr(self.apibase)+user+">"
+		user = f' User:{self.username}' if self.username else ' not logged in'
+		return f"<{self.__module__}.{self.__class__.__name__} {repr(self.apibase)}{user}>"
 		
 		
 
